@@ -61,7 +61,7 @@ const getPropertyDetail = asyncHandler(async (req, res) => {
     );
 });
 
-const createPropery = asyncHandler(async (req, res) => {
+const createProperty = asyncHandler(async (req, res) => {
   try {
     const { title, description, propertyType, location, price, email } =
       req.body;
@@ -109,6 +109,70 @@ const createPropery = asyncHandler(async (req, res) => {
         new ApiResponse(201, newProperty, "Property created successfully!")
       );
   } catch (error) {
-    throw new ApiError(401, "property creation failed!");
+    throw new ApiError(500, "property creation failed!");
   }
 });
+
+const updateProperty = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, propertyType, location, price } = req.body;
+    const photoLocalPath = req.files?.photo[0]?.path;
+    const photo = await uploadCloudinary(photoLocalPath);
+
+    const updatedPropertise = await PropertyModel.findByIdAndUpdate(
+      { _id: id },
+      {
+        title,
+        description,
+        propertyType,
+        location,
+        price,
+        photo: photo.url || "",
+      }
+    );
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, updatedPropertise, "Propertise are updated!"));
+  } catch (error) {
+    throw new ApiError(500, "property update failed!");
+  }
+});
+
+const deleteProperty = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const propertyToDelete = await PropertyModel.findById({ _id: id }).populate(
+      "creator"
+    );
+
+    if (!propertyToDelete) {
+      throw new ApiError(500, "property not found!");
+    }
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    propertyToDelete.remove({ session });
+    propertyToDelete.creator.allProperties.pull(propertyToDelete);
+
+    await propertyToDelete.creator.save({ session });
+    await session.commitTransaction();
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, propertyToDelete, "deletion done successfully!")
+      );
+  } catch (error) {
+    throw new ApiError(500, "Deletion failed!");
+  }
+});
+
+export {
+  getAllProperties,
+  getPropertyDetail,
+  createProperty,
+  updateProperty,
+  deleteProperty,
+};
