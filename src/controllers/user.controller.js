@@ -33,7 +33,7 @@ const registerUser = asyncHandler(async (req, res) => {
   if (existedUser) {
     throw new ApiError(409, "User with name or email already exists!");
   }
-  const avatarLocalPath = req.files?.avatar[0].path;
+  const avatarLocalPath = req.files?.avatar[0]?.path;
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar is required!");
   }
@@ -58,17 +58,15 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
-  if (!name && !email) {
+  const { email, password } = req.body;
+  if (!email) {
     throw new ApiError(500, "Name and Email are required!");
   }
-  const user = await UserModel.findOne({
-    $or: [{ name }, { email }],
-  });
+  const user = await UserModel.findOne({email});
   if (!user) {
     throw new ApiError(404, "User does not exist!");
   }
-  const isPasswordValid = await UserModel.isPasswordCorrect(password);
+  const isPasswordValid = await user.isPasswordCorrect(password);
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid user credentials!");
   }

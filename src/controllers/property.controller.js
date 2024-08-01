@@ -4,8 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import UserModel from "../models/user.model.js";
-import { uploadCloudinary } from "../utils/cloudinary";
-import { upload } from "../middlewares/multer.middleware.js";
+import { uploadCloudinary } from "../utils/cloudinary.js";
 
 const getAllProperties = asyncHandler(async (req, res) => {
   const {
