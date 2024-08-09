@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import PropertyForm from "../components/PropertyForm";
 import PropertyItem from "../components/PropertyItem";
 import { useDispatch, useSelector } from "react-redux";
