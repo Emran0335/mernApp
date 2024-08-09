@@ -86,7 +86,7 @@ h3 {
   color: #828282;
 }
 
-.goals {
+.propertise {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;

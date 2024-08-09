@@ -1,10 +1,10 @@
 import { configureStore } from "@reduxjs/toolkit";
-// import goalReducer from "../features/goals/goalSlice";
+import propertyReducer from "../features/property/propertySlice";
 import authReducer from "../features/auth/authSlice";
 
 const store = configureStore({
   reducer: {
-    // goals: goalReducer,
+    propertise: propertyReducer,
     auth: authReducer,
   },
 });
