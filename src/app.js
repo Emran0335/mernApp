@@ -22,6 +22,6 @@ app.use(cookieParser())
 
 // all routes should be added here
 app.use("/api/v1/users", userRouter);
-app.use("/api/v1/propertise", propertyRouter)
+app.use("/api/v1/properties", propertyRouter)
 
 export { app };

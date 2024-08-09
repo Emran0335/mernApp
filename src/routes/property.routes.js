@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { upload } from "../middlewares/multer.middleware.js";
+import { verifyJWT } from "../middlewares/auth.middleware.js";
 import {
   createProperty,
   deleteProperty,
@@ -11,7 +12,7 @@ import {
 const router = Router();
 
 router.route("/").get(getAllProperties);
-router.route("/:id").get(getPropertyDetail);
+router.route("/:id").get(verifyJWT, getPropertyDetail);
 router.route("/").post(
   upload.fields([
     {
@@ -19,9 +20,11 @@ router.route("/").post(
       maxCount: 1,
     },
   ]),
+  verifyJWT,
   createProperty
 );
 router.route("/:id").patch(
+  verifyJWT,
   upload.fields([
     {
       name: "photo",
@@ -30,6 +33,6 @@ router.route("/:id").patch(
   ]),
   updateProperty
 );
-router.route("/:id").delete(deleteProperty);
+router.route("/:id").delete(verifyJWT, deleteProperty);
 
 export default router;

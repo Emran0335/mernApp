@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { verifyJWT } from "../middlewares/auth.middleware.js";
 import {
   loginUser,
   registerUser,
@@ -19,6 +20,6 @@ router.route("/register").post(
   registerUser
 );
 router.route("/login").post(loginUser);
-router.route("/:id").get(getUserInfoById);
+router.route("/:id").get(verifyJWT, getUserInfoById);
 
 export default router;

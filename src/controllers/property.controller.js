@@ -9,34 +9,42 @@ import { uploadCloudinary } from "../utils/cloudinary.js";
 const getAllProperties = asyncHandler(async (req, res) => {
   const {
     _end,
-    _order,
-    _start,
-    _sort,
+    _order = "asc", // Default order if not provided
+    _start = 0, // Default start to 0
+    _sort = "createdAt", // Default sort field if not provided
     title_like = "",
     propertyType = "",
   } = req.query;
 
+  // Build the query object based on provided filters
   const query = {};
-  if (propertyType !== "") {
+  if (propertyType) {
     query.propertyType = propertyType;
   }
   if (title_like) {
     query.title = { $regex: title_like, $options: "i" };
   }
+
   try {
-    const count = await PropertyModel.countDocuments({ query });
+    // Get the total count of documents that match the query
+    const count = await PropertyModel.countDocuments(query);
+
+    // Get the properties based on the query, pagination, and sorting
     const properties = await PropertyModel.find(query)
-      .limit(_end)
-      .skip(_start)
-      .sort({ [_sort]: _order });
+      .limit(parseInt(_end) - parseInt(_start))
+      .skip(parseInt(_start))
+      .sort({ [_sort]: _order === "asc" ? 1 : -1 });
+
+    // Set headers for pagination
     res.header("x-total-count", count);
     res.header("Access-Control-Expose-Headers", "x-total-count");
 
+    // Send the response with the properties data
     return res
       .status(200)
-      .json(new ApiResponse(200, properties, "Propertise are found!"));
+      .json(new ApiResponse(200, properties, "Properties found successfully!"));
   } catch (error) {
-    throw new ApiError(500, "Invalid query!");
+    throw new ApiError(500, "An error occurred while fetching properties.");
   }
 });
 
