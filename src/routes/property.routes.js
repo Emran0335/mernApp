@@ -12,11 +12,15 @@ import {
 const router = Router();
 
 router.route("/").get(getAllProperties);
-router.route("/:id").get(verifyJWT, getPropertyDetail);
+router.route("/:propertyId").get(verifyJWT, getPropertyDetail);
 router.route("/").post(
   upload.fields([
     {
-      name: "photo",
+      name: "thumbnail",
+      maxCount: 1,
+    },
+    {
+      name: "videoFile",
       maxCount: 1,
     },
   ]),

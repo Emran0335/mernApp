@@ -1,4 +1,5 @@
-import UserModel from "../models/user.model.js";
+import mongoose, { isValidObjectId } from "mongoose";
+import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -7,7 +8,7 @@ import { uploadCloudinary } from "../utils/cloudinary.js";
 // for creating of the token of the user
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
-    const user = await UserModel.findOne(userId);
+    const user = await User.findOne(userId);
 
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
@@ -29,7 +30,7 @@ const registerUser = asyncHandler(async (req, res) => {
   if ([name, email, password].some((field) => field?.trim() === "")) {
     throw new ApiError(400, "All fields are required");
   }
-  const existedUser = await UserModel.findOne({ $or: [{ name }, { email }] });
+  const existedUser = await User.findOne({ $or: [{ name }, { email }] });
   if (existedUser) {
     throw new ApiError(409, "User with name or email already exists!");
   }
@@ -42,16 +43,19 @@ const registerUser = asyncHandler(async (req, res) => {
   if (!avatar) {
     throw new ApiError(400, "Avatar file not retrieved from cloudinary");
   }
-  const user = await UserModel.create({
+  const user = await User.create({
     name: name,
     email: email,
     password: password,
-    avatar: avatar.url,
+    avatar: avatar.url || "",
   });
 
-  const createdUser = await UserModel.findById(user._id).select(
+  const createdUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
+  if (!createdUser) {
+    throw new ApiError(500, "Something went wrong while registering the user");
+  }
   return res
     .status(201)
     .json(new ApiResponse(200, createdUser, "User registered successfully"));
@@ -59,10 +63,12 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-  if (!email) {
-    throw new ApiError(500, "Name and Email are required!");
+  if (!email && !password) {
+    throw new ApiError(500, "Email and Password are required!");
   }
-  const user = await UserModel.findOne({email});
+  const user = await User.findOne({
+    $or: [{ password }, { email }],
+  });
   if (!user) {
     throw new ApiError(404, "User does not exist!");
   }
@@ -73,7 +79,7 @@ const loginUser = asyncHandler(async (req, res) => {
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
     user._id
   );
-  const loggedInUser = await UserModel.findById(user._id).select(
+  const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
   const options = {
@@ -99,7 +105,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const getAllUsers = asyncHandler(async (req, res) => {
   try {
-    const users = await UserModel.find({}).limit(req.query._end);
+    const users = await User.find({}).limit(req.query._end);
     return res
       .status(200)
       .json(new ApiResponse(200, users, "All users are found!"));
@@ -109,18 +115,69 @@ const getAllUsers = asyncHandler(async (req, res) => {
 });
 
 const getUserInfoById = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const user = await UserModel.findOne({ _id: id }).populate("allProperties");
+  const { userId } = req.params;
 
-  if (!user) {
-    throw new ApiError(404, "User not found!");
+  if (!userId || !isValidObjectId(userId)) {
+    new ApiError(400, "User Id is not valid");
   }
+  const user = await User.findById(userId);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "User is fetched successfully"));
+});
+
+const getUserProperties = asyncHandler(async (req, res) => {
+  const userProperty = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id),
+      },
+    },
+    {
+      $lookup: {
+        from: "properties",
+        localField: "propertyHistory",
+        foreignField: "_id",
+        as: "propertyHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "creator",
+              foreignField: "_id",
+              as: "creator",
+              pipeline: [
+                {
+                  $project: {
+                    name: 1,
+                    email: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
   return res
     .status(200)
     .json(
-      new ApiResponse(200, user, "User information is retrieved successfully!")
+      new ApiResponse(
+        200,
+        userProperty[0].propertyHistory,
+        "Property history fetched successfully"
+      )
     );
 });
 
-export { getAllUsers, getUserInfoById, loginUser, registerUser };
-
+export {
+  getAllUsers,
+  getUserInfoById,
+  getUserProperties,
+  loginUser,
+  registerUser,
+};

@@ -1,14 +1,41 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 const userSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    email: { type: String, unique: true, required: true },
-    password: { type: String, required: true },
-    avatar: { type: String, required: true },
-    allProperties: [{ type: mongoose.Schema.Types.ObjectId, ref: "Property" }],
+    name: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      index: true,
+    },
+    email: {
+      type: String,
+      unique: true,
+      required: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: [true, "Password is required"],
+    },
+    avatar: {
+      type: String,
+      required: true,
+    },
+    refreshToken: {
+      type: String,
+    },
+    propertyHistory: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Property",
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -27,7 +54,6 @@ userSchema.methods.generateAccessToken = function () {
   return jwt.sign(
     {
       _id: this._id,
-      email: this.email,
     },
     process.env.ACCESS_TOKEN_SECRET,
     {
@@ -48,6 +74,4 @@ userSchema.methods.generateRefreshToken = function () {
   );
 };
 
-const UserModel = mongoose.model("User", userSchema);
-
-export default UserModel;
+export const User = mongoose.model("User", userSchema);

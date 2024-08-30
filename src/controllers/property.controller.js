@@ -1,123 +1,192 @@
-import mongoose from "mongoose";
-import PropertyModel from "../models/property.model.js";
+import mongoose, { isValidObjectId } from "mongoose";
+import { Property } from "../models/property.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import UserModel from "../models/user.model.js";
+import { User } from "../models/user.model.js";
 import { uploadCloudinary } from "../utils/cloudinary.js";
 
 const getAllProperties = asyncHandler(async (req, res) => {
   const {
-    _end,
-    _order = "asc", // Default order if not provided
-    _start = 0, // Default start to 0
-    _sort = "createdAt", // Default sort field if not provided
-    title_like = "",
-    propertyType = "",
+    page = 1,
+    limit = 10,
+    query,
+    sortBy = "createdAt",
+    sortType = "desc",
   } = req.query;
-
-  // Build the query object based on provided filters
-  const query = {};
-  if (propertyType) {
-    query.propertyType = propertyType;
+  if (!query || query.trim() === "") {
+    throw new ApiError(400, "Query is required");
   }
-  if (title_like) {
-    query.title = { $regex: title_like, $options: "i" };
-  }
-
-  try {
-    // Get the total count of documents that match the query
-    const count = await PropertyModel.countDocuments(query);
-
-    // Get the properties based on the query, pagination, and sorting
-    const properties = await PropertyModel.find(query)
-      .limit(parseInt(_end) - parseInt(_start))
-      .skip(parseInt(_start))
-      .sort({ [_sort]: _order === "asc" ? 1 : -1 });
-
-    // Set headers for pagination
-    res.header("x-total-count", count);
-    res.header("Access-Control-Expose-Headers", "x-total-count");
-
-    // Send the response with the properties data
-    return res
-      .status(200)
-      .json(new ApiResponse(200, properties, "Properties found successfully!"));
-  } catch (error) {
-    throw new ApiError(500, "An error occurred while fetching properties.");
-  }
-});
-
-const getPropertyDetail = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const propertyExists = await PropertyModel.findOne({ _id: id }).populate(
-    "creator"
-  );
-
-  if (!propertyExists) {
-    throw new ApiError(500, "properties are not found!");
+  const properties = await Property.aggregate([
+    {
+      $match: {
+        $or: [
+          {
+            title: { $regex: query, $options: "i" },
+          },
+          {
+            description: { $regex: query, $options: "i" },
+          },
+        ],
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "creator",
+        foreignField: "_id",
+        as: "creator",
+        pipeline: [
+          {
+            $project: {
+              avatar: 1,
+              name: 1,
+              email: 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      $addFields: {
+        creator: {
+          $first: "$creator",
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        creator: 1,
+        videoFile: 1,
+        thumbnail: 1,
+        createdAt: 1,
+        description: 1,
+        title: 1,
+      },
+    },
+    {
+      $sort: {
+        [sortBy]: sortType === "asc" ? 1 : -1,
+      },
+    },
+    {
+      $skip: (page - 1) * limit,
+    },
+    {
+      $limit: parseInt(limit),
+    },
+  ]);
+  if (!properties?.length) {
+    throw new ApiError(404, "No properties found for given query");
   }
   return res
     .status(200)
     .json(
-      new ApiResponse(
-        200,
-        propertyExists,
-        "All properties are retrieved successfully!5"
-      )
+      new ApiResponse(200, properties, "All properties fetched successfully")
+    );
+});
+
+const getPropertyDetail = asyncHandler(async (req, res) => {
+  const { propertyId } = req.params;
+  if (!propertyId || !isValidObjectId(propertyId)) {
+    throw new ApiError(400, "Invalid property Id");
+  }
+  const property = await Property.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(propertyId),
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "creator",
+        foreignField: "_id",
+        as: "creator",
+      },
+    },
+    {
+      $addFields: {
+        creator: {
+          $first: "$creator",
+        },
+      },
+    },
+    {
+      $project: {
+        name: 1,
+        avatar: 1,
+        videoFile: 1,
+        thumbnail: 1,
+        creator: 1
+      },
+    },
+  ]);
+
+  if (!property) {
+    throw new ApiError(500, "properties are not found!");
+  }
+  await User.findByIdAndUpdate(req.user?._id, {
+    $addToSet: {
+      propertyHistory: propertyId,
+    },
+  });
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, property[0], "Property retrieved successfully!")
     );
 });
 
 const createProperty = asyncHandler(async (req, res) => {
-  try {
-    const { title, description, propertyType, location, price, email } =
-      req.body;
-    if (
-      [title, email, description, propertyType, location, price].some(
-        (field) => field?.trim() === ""
-      )
-    ) {
-      throw new ApiError(400, "All fields are required!");
-    }
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    const user = await UserModel.findOne({ email }).session(session);
-    console.log(user);
-    const photoLocalPath = req.files?.photo[0]?.path;
-    const photo = await uploadCloudinary(photoLocalPath);
-    if (!photo) {
-      throw new ApiError(400, "Photo file not retrieved from cloudinary!");
-    }
-
-    const newProperty = await PropertyModel.create({
-      title,
-      description,
-      propertyType,
-      location,
-      price,
-      photo: photo.url,
-      creator: user._id,
-    });
-    if (!newProperty) {
-      throw new ApiError(
-        500,
-        "Something went wrong while newProperty the user"
-      );
-    }
-
-    user.allProperties.push(newProperty._id);
-    await user.save({ session });
-    await session.commitTransaction();
-
-    return res
-      .status(201)
-      .json(
-        new ApiResponse(201, newProperty, "Property created successfully!")
-      );
-  } catch (error) {
-    throw new ApiError(500, "property creation failed!");
+  const { title, description, propertyType, location, price } = req.body;
+  if (
+    [title, description, propertyType, location, price].some(
+      (field) => field?.trim() === ""
+    )
+  ) {
+    throw new ApiError(400, "All fields are required!");
   }
+
+  const thumbnailLocalPath = req.files?.thumbnail[0]?.path;
+  if (!thumbnailLocalPath) {
+    unlinkPath(videoFileLocalPath, thumbnailLocalPath);
+    throw new ApiError(400, "Thumbnail is required");
+  }
+  const videoFileLocalPath = req.files?.videoFile[0]?.path;
+  if (!videoFileLocalPath) {
+    unlinkPath(videoFileLocalPath, thumbnailLocalPath);
+    throw new ApiError(400, "Video file is required");
+  }
+  const thumbnail = await uploadCloudinary(thumbnailLocalPath);
+  const videoFile = await uploadCloudinary(videoFileLocalPath);
+
+  if (!videoFile || !thumbnail) {
+    throw new ApiError(400, "VideoFile or thumbnail is missing!");
+  }
+
+  const newProperty = await Property.create({
+    title,
+    description,
+    propertyType,
+    location,
+    price,
+    videoFile: videoFile?.url,
+    thumbnail: thumbnail?.url,
+    creator: req.user?._id,
+  });
+  if (!newProperty) {
+    throw new ApiError(
+      500,
+      "Something went wrong while creating newProperty for the user"
+    );
+  }
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, newProperty, "Property created successfully!"));
 });
 
 const updateProperty = asyncHandler(async (req, res) => {
@@ -127,7 +196,7 @@ const updateProperty = asyncHandler(async (req, res) => {
     const photoLocalPath = req.files?.photo[0]?.path;
     const photo = await uploadCloudinary(photoLocalPath);
 
-    const updatedPropertise = await PropertyModel.findByIdAndUpdate(
+    const updatedPropertise = await Property.findByIdAndUpdate(
       { _id: id },
       {
         title,
@@ -150,7 +219,7 @@ const updateProperty = asyncHandler(async (req, res) => {
 const deleteProperty = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    const propertyToDelete = await PropertyModel.findById({ _id: id }).populate(
+    const propertyToDelete = await Property.findById({ _id: id }).populate(
       "creator"
     );
 

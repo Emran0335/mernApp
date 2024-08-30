@@ -5,6 +5,7 @@ import {
   registerUser,
   getAllUsers,
   getUserInfoById,
+  getUserProperties
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
@@ -20,6 +21,7 @@ router.route("/register").post(
   registerUser
 );
 router.route("/login").post(loginUser);
-router.route("/:id").get(verifyJWT, getUserInfoById);
+router.route("/history").get(verifyJWT, getUserProperties);
+router.route("/:userId").get(verifyJWT, getUserInfoById);
 
 export default router;
