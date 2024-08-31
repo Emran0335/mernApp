@@ -103,15 +103,11 @@ const loginUser = asyncHandler(async (req, res) => {
     );
 });
 
-const getAllUsers = asyncHandler(async (req, res) => {
-  try {
-    const users = await User.find({}).limit(req.query._end);
+const getCurrentUser = asyncHandler(async (req, res) => {
     return res
       .status(200)
-      .json(new ApiResponse(200, users, "All users are found!"));
-  } catch (error) {
-    return res.status(500).json(new ApiResponse(500, "Data is not available!"));
-  }
+      .json(new ApiResponse(200, req.user, "Current User is not found!"));
+ 
 });
 
 const getUserInfoById = asyncHandler(async (req, res) => {
@@ -173,11 +169,33 @@ const getUserProperties = asyncHandler(async (req, res) => {
       )
     );
 });
-
+const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $unset: {
+        refreshToken: 1, // this will remove the field from document
+      },
+    },
+    {
+      new: true,
+    }
+  );
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged out!"));
+});
 export {
-  getAllUsers,
+  getCurrentUser,
   getUserInfoById,
   getUserProperties,
   loginUser,
   registerUser,
+  logoutUser,
 };

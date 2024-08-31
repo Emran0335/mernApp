@@ -3,14 +3,16 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 import {
   loginUser,
   registerUser,
-  getAllUsers,
+  getCurrentUser,
   getUserInfoById,
-  getUserProperties
+  getUserProperties,
+  logoutUser,
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
-router.route("/").get(getAllUsers);
+
+router.route("/").get(verifyJWT, getCurrentUser);
 router.route("/register").post(
   upload.fields([
     {
@@ -21,6 +23,7 @@ router.route("/register").post(
   registerUser
 );
 router.route("/login").post(loginUser);
+router.route("/logout").post(verifyJWT, logoutUser);
 router.route("/history").get(verifyJWT, getUserProperties);
 router.route("/:userId").get(verifyJWT, getUserInfoById);
 

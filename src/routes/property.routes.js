@@ -10,9 +10,14 @@ import {
 } from "../controllers/property.controller.js";
 
 const router = Router();
+router.use(verifyJWT);
 
 router.route("/").get(getAllProperties);
-router.route("/:propertyId").get(verifyJWT, getPropertyDetail);
+router
+  .route("/:propertyId")
+  .get(getPropertyDetail)
+  .patch(upload.single("thumbnail"), updateProperty)
+  .delete(deleteProperty);
 router.route("/").post(
   upload.fields([
     {
@@ -24,19 +29,7 @@ router.route("/").post(
       maxCount: 1,
     },
   ]),
-  verifyJWT,
   createProperty
 );
-router.route("/:id").patch(
-  verifyJWT,
-  upload.fields([
-    {
-      name: "photo",
-      maxCount: 1,
-    },
-  ]),
-  updateProperty
-);
-router.route("/:id").delete(verifyJWT, deleteProperty);
 
 export default router;

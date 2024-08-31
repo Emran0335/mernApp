@@ -1,10 +1,10 @@
 import mongoose, { isValidObjectId } from "mongoose";
 import { Property } from "../models/property.model.js";
+import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import { User } from "../models/user.model.js";
-import { uploadCloudinary } from "../utils/cloudinary.js";
+import { deleteFromCloudinary, uploadCloudinary } from "../utils/cloudinary.js";
 
 const getAllProperties = asyncHandler(async (req, res) => {
   const {
@@ -104,13 +104,15 @@ const getPropertyDetail = asyncHandler(async (req, res) => {
         localField: "creator",
         foreignField: "_id",
         as: "creator",
-      },
-    },
-    {
-      $addFields: {
-        creator: {
-          $first: "$creator",
-        },
+        pipeline: [
+          {
+            $project: {
+              name: 1,
+              email: 1,
+              avatar: 1,
+            }
+          }
+        ]
       },
     },
     {
@@ -119,9 +121,10 @@ const getPropertyDetail = asyncHandler(async (req, res) => {
         avatar: 1,
         videoFile: 1,
         thumbnail: 1,
-        creator: 1
+        creator: 1,
       },
     },
+    
   ]);
 
   if (!property) {
@@ -135,9 +138,7 @@ const getPropertyDetail = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(
-      new ApiResponse(200, property[0], "Property retrieved successfully!")
-    );
+    .json(new ApiResponse(200, property, "Property retrieved successfully!"));
 });
 
 const createProperty = asyncHandler(async (req, res) => {
@@ -190,65 +191,86 @@ const createProperty = asyncHandler(async (req, res) => {
 });
 
 const updateProperty = asyncHandler(async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { title, description, propertyType, location, price } = req.body;
-    const photoLocalPath = req.files?.photo[0]?.path;
-    const photo = await uploadCloudinary(photoLocalPath);
+  const { title, description, price } = req.body;
+  const { propertyId } = req.params;
+  const thumbnailLocalPath = req.file?.path;
 
-    const updatedPropertise = await Property.findByIdAndUpdate(
-      { _id: id },
-      {
-        title,
-        description,
-        propertyType,
-        location,
-        price,
-        photo: photo.url || "",
-      }
-    );
-
-    return res
-      .status(200)
-      .json(new ApiResponse(200, updatedPropertise, "Propertise are updated!"));
-  } catch (error) {
-    throw new ApiError(500, "property update failed!");
+  if (!propertyId || !isValidObjectId(propertyId)) {
+    unlinkPath(null, thumbnailLocalPath);
+    throw new ApiError(400, "Property Id is invalid");
   }
+
+  if (!title && !description && !price && !thumbnailLocalPath) {
+    unlinkPath(null, thumbnailLocalPath);
+    throw new ApiError(400, "At least one field should be updated");
+  }
+  const property = await Property.findById(propertyId);
+  if (!property) {
+    unlinkPath(null, thumbnailLocalPath);
+    throw new ApiError(404, "Property not found");
+  }
+  if (req.user?._id.toString() !== property?.creator.toString()) {
+    unlinkPath(null, thumbnailLocalPath);
+    throw new ApiError(401, "You do not have permission to perform updating");
+  }
+  let thumbnail;
+  if (thumbnailLocalPath) {
+    thumbnail = await uploadCloudinary(thumbnailLocalPath);
+    if (!thumbnail) {
+      throw new ApiError(400, "Error while uploading thumbnail on cloudinary");
+    } else {
+      const thumbnailUrl = property?.thumbnail;
+      const regex = /\/([^/]+)\.[^.]+$/;
+      const match = thumbnailUrl.match(regex);
+      if (!match) {
+        throw new ApiError(400, "Could not find Public Id of old thumbnail");
+      }
+      const publicId = match[1];
+      await deleteFromCloudinary(publicId);
+    }
+  }
+  const updatedProperty = await Property.findByIdAndUpdate(
+    propertyId,
+    {
+      $set: {
+        title: title || property?.title,
+        description: description || property?.description,
+        price: price || property?.price,
+        thumbnail: thumbnail.url || property?.thumbnail,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+  if (!updatedProperty) {
+    throw new ApiError(500, "Error while updating property");
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedProperty, "Property is updated!"));
 });
 
 const deleteProperty = asyncHandler(async (req, res) => {
-  try {
-    const { id } = req.params;
-    const propertyToDelete = await Property.findById({ _id: id }).populate(
-      "creator"
-    );
-
-    if (!propertyToDelete) {
-      throw new ApiError(500, "property not found!");
-    }
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    propertyToDelete.remove({ session });
-    propertyToDelete.creator.allProperties.pull(propertyToDelete);
-
-    await propertyToDelete.creator.save({ session });
-    await session.commitTransaction();
-
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(200, propertyToDelete, "deletion done successfully!")
-      );
-  } catch (error) {
-    throw new ApiError(500, "Deletion failed!");
+  const { propertyId } = req.params;
+  if (!propertyId || !isValidObjectId) {
+    throw new ApiError(400, "Invalid property Id");
   }
+  const deletedProperty = await Property.findByIdAndDelete(propertyId);
+
+  if (!deletedProperty) {
+    throw new ApiError(500, "property not found!");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, deletedProperty, "deletion done successfully!"));
 });
 
 export {
+  createProperty,
+  deleteProperty,
   getAllProperties,
   getPropertyDetail,
-  createProperty,
   updateProperty,
-  deleteProperty,
 };
