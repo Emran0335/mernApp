@@ -117,8 +117,10 @@ const getPropertyDetail = asyncHandler(async (req, res) => {
     },
     {
       $project: {
-        name: 1,
-        avatar: 1,
+        title: 1,
+        description: 1,
+        price: 1,
+        location: 1,
         videoFile: 1,
         thumbnail: 1,
         creator: 1,
