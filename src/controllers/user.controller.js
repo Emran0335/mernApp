@@ -8,10 +8,13 @@ import { uploadCloudinary } from "../utils/cloudinary.js";
 // for creating of the token of the user
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
-    const user = await User.findOne(userId);
+    const user = await User.findById(userId);
 
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
+
+    // refreshToekn should be customized again to add to user object.
+    user.refreshToken = refreshToken;
 
     await user.save({ validateBeforeSave: false });
 
@@ -111,10 +114,12 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 
 const getUserInfoById = asyncHandler(async (req, res) => {
   const { userId } = req.params;
-
-  if (!userId || !isValidObjectId(userId)) {
+  console.log(userId);
+  console.log(req.user?._id);
+  if (!userId && !isValidObjectId(userId)) {
     new ApiError(400, "User Id is not valid");
   }
+
   const user = await User.findById(userId);
 
   return res

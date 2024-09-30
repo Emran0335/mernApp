@@ -21,7 +21,7 @@ app.use(express.static("public"));
 app.use(cookieParser())
 
 // all routes should be added here
-app.use("/api/v1/users", userRouter);
-app.use("/api/v1/properties", propertyRouter)
+app.use("/api/t1/users", userRouter);
+app.use("/api/t1/properties", propertyRouter)
 
 export { app };

@@ -7,12 +7,14 @@ import {
   getAllProperties,
   getPropertyDetail,
   updateProperty,
+  getProperty
 } from "../controllers/property.controller.js";
 
 const router = Router();
 router.use(verifyJWT);
 
 router.route("/").get(getAllProperties);
+router.route("/userProperty").get(getProperty);
 router
   .route("/:propertyId")
   .get(getPropertyDetail)

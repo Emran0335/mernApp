@@ -89,6 +89,7 @@ const getAllProperties = asyncHandler(async (req, res) => {
 
 const getPropertyDetail = asyncHandler(async (req, res) => {
   const { propertyId } = req.params;
+  console.log(propertyId);
   if (!propertyId || !isValidObjectId(propertyId)) {
     throw new ApiError(400, "Invalid property Id");
   }
@@ -110,9 +111,9 @@ const getPropertyDetail = asyncHandler(async (req, res) => {
               name: 1,
               email: 1,
               avatar: 1,
-            }
-          }
-        ]
+            },
+          },
+        ],
       },
     },
     {
@@ -126,7 +127,6 @@ const getPropertyDetail = asyncHandler(async (req, res) => {
         creator: 1,
       },
     },
-    
   ]);
 
   if (!property) {
@@ -269,10 +269,21 @@ const deleteProperty = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, deletedProperty, "deletion done successfully!"));
 });
 
+const getProperty = asyncHandler(async (req, res) => {
+  const property = await Property.find({ creator: req.user._id });
+  if (!property) {
+    throw new ApiError(500, "No propery found");
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, property, "Propety fetched successfully"));
+});
+
 export {
   createProperty,
   deleteProperty,
   getAllProperties,
   getPropertyDetail,
   updateProperty,
+  getProperty,
 };
